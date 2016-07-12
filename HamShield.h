@@ -2,12 +2,16 @@
 // Based on Programming Manual rev. 2.0, 5/19/2011 (RM-MPU-6000A-00)
 // 11/22/2013 by Morgan Redfield <redfieldm@gmail.com>
 // 04/26/2015 various changes Casey Halverson <spaceneedle@gmail.com>
+// 07/11/2016 various changes to CTCSS as per AT1846S dox Kodetroll(KB4OID) <kb4oid@kb4oid.org>
+//		NOTE: These changes break the previous API somewhat (some functions renamed)
 
 
 
 #ifndef _HAMSHIELD_H_
 #define _HAMSHIELD_H_
 
+//#include "I2Cdev_rda.h"
+//#include "I2Cdev.h"
 #include "HamShield_comms.h"
 #include "SimpleFIFO.h"
 #include "AFSK.h"
@@ -28,6 +32,11 @@
 #define PTT_MODE 1
 #define RESET_MODE 2
 
+// Device Constants
+#define A1846S_DEV_ADDR_SENHIGH 0b0101110
+#define A1846S_DEV_ADDR_SENLOW  0b1110001
+
+
 // Device Registers
 #define A1846S_CTL_REG              0x30    // control register
 #define A1846S_CLK_MODE_REG         0x04    // clk_mode
@@ -44,12 +53,17 @@
 #define A1846S_TH_L_VOX_REG         0x42    // register holds vox low (shut) threshold bits
 #define A1846S_FM_DEV_REG           0x43    // register holds fm deviation settings
 #define A1846S_RX_VOLUME_REG        0x44    // register holds RX volume settings
+#define A1846S_SUBAUDIO_REG_NEW     0x4e    // sub audio register
 #define A1846S_SUBAUDIO_REG         0x45    // sub audio register
 #define A1846S_SQ_OPEN_THRESH_REG   0x48    // see sq
 #define A1846S_SQ_SHUT_THRESH_REG   0x49    // see sq
 #define A1846S_CTCSS_FREQ_REG       0x4A    // ctcss_freq<15:0>
+#define A1846S_CTCSS_FREQ_REG_TX    0x4A    // ctcss_freq<15:0>
 #define A1846S_CDCSS_CODE_HI_REG    0x4B    // cdcss_code<23:16>
 #define A1846S_CDCSS_CODE_LO_REG    0x4C    // cdccs_code<15:0>
+#define A1846S_CTCSS_FREQ_REGA      0x4D    // ctcss_freq<15:0> new
+#define A1846S_CTCSS_FREQ_REG_RX    0x4D    // ctcss_freq<15:0> new
+#define A1846S_CTCSS_FREQ_REGB      0x4E    // ctcss_freq<15:0> new
 #define A1846S_SQ_OUT_SEL_REG       0x54    // see sq
 #define A1846S_EMPH_FILTER_REG      0x58
 #define A1846S_FLAG_REG             0x5C    // holds flags for different statuses
@@ -157,6 +171,11 @@
 #define A1846S_C_MODE_BIT          2  // c_mode<2:0>
 #define A1846S_C_MODE_LENGTH       3
 
+// Bitfields for A1846S_SUBAUDIO_REG_NEW Sub Audio Register
+#define A1846S_CTCSS_SHIFT_SEL_BIT      15  // shift_sel<1:0> see eliminating tail noise
+#define A1846S_CTCSS_SHIFT_SEL_LENGTH    2
+#define A1846S_CTCSS_MODE_SEL_BIT      10  // ctcss_sel
+#define A1846S_CTCSS_MODE_SEL_LENGTH    2
 // Bitfields for A1846S_SQ_THRESH_REG
 #define A1846S_SQ_OPEN_THRESH_BIT     9  // sq open threshold <9:0>
 #define A1846S_SQ_OPEN_THRESH_LENGTH 10
@@ -231,11 +250,14 @@
 #define A1846S_DTMF_C7_BIT              7
 #define A1846S_DTMF_C7_LENGTH           8
 
+#define CTCSS_FREQ_TX			        0
+#define CTCSS_FREQ_RX			        1
+
 // SSTV VIS Codes
 
 
 #define ROBOT8BW 2
-#define SC2_180 55
+#define SC2-180 55
 #define MARTIN1 44
 
 // RTTY Frequencies
@@ -256,7 +278,7 @@ class HamShield {
         static HamShield *sHamShield; // HamShield singleton, used for ISRs mostly
 		
         HamShield();
-        HamShield(uint8_t cs_pin);
+        HamShield(uint8_t address);
 
         void initialize();
         bool testConnection();
@@ -282,6 +304,8 @@ class HamShield {
 		void setModeTransmit(); // turn off rx, turn on tx
 		void setModeReceive(); // turn on rx, turn off tx
 		void setModeOff(); // turn off rx, turn off tx, set pwr_dwn bit
+		
+		bool getRX();
 		
 		// set tx source
 		// 00 - Mic source
@@ -353,9 +377,21 @@ class HamShield {
 		bool getCssDetEnabled();
 		
 		// ctcss freq
-		void setCtcss(float freq);
-		void setCtcssFreq(uint16_t freq);
-		uint16_t getCtcssFreq();
+		void setCtcssPhase(uint16_t ctcssPhaseSel);
+		void setCtcssTxMode(uint16_t ctcssTxModeSel);
+		void setCtcssTxEnable(void);
+		void setCtcss(uint8_t which, float freq);
+		void setCtcssTx(float freq);
+		void setCtcssRx(float freq);
+		void setCtcssFull(float fltTxFreq, float fltRxFreq);
+		//void setCtcssFreq(uint16_t freq);
+		void setCtcssTxFreq(uint16_t freq);
+		void setCtcssRxFreq(uint16_t freq);
+		void setCtcssFreq(uint8_t which, uint16_t freq);
+
+		uint16_t getCtcssFreq(uint8_t which);
+		uint16_t getCtcssTxFreq();
+		uint16_t getCtcssRxFreq();
 		void setCtcssFreqToStandard(); // freq must be 134.4Hz for standard cdcss mode
 		
 		// cdcss codes
@@ -368,10 +404,10 @@ class HamShield {
 		bool getSQState();
 		
 		// SQ threshold
-		void setSQHiThresh(int16_t sq_hi_threshold); // Sq detect high th, rssi_cmp will be 1 when rssi>th_h_sq, unit 1dB
-		int16_t getSQHiThresh();
-		void setSQLoThresh(int16_t sq_lo_threshold); // Sq detect low th, rssi_cmp will be 0 when rssi<th_l_sq && time delay meet, unit 1dB
-		int16_t getSQLoThresh();
+		void setSQHiThresh(uint16_t sq_hi_threshold); // Sq detect high th, rssi_cmp will be 1 when rssi>th_h_sq, unit 1/8dB
+		uint16_t getSQHiThresh();
+		void setSQLoThresh(uint16_t sq_lo_threshold); // Sq detect low th, rssi_cmp will be 0 when rssi<th_l_sq && time delay meet, unit 1/8 dB
+		uint16_t getSQLoThresh();
 		
 		// SQ out select
 		void setSQOutSel();
@@ -544,7 +580,7 @@ class HamShield {
 		bool getTX();
 		
 		void setRX(bool on_noff);
-		bool getRX();
+		//bool getRX();
 };
 
 #endif /* _HAMSHIELD_H_ */

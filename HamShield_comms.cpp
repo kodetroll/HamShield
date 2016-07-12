@@ -1,6 +1,9 @@
 /*
  * Based loosely on I2Cdev by Jeff Rowberg, except for all kludgy bit-banging
  */
+// 07/11/2016 reverted to a previous version of this file to accomodate
+// various changes to CTCSS as per AT1846S dox Kodetroll(KB4OID) <kb4oid@kb4oid.org>
+//		NOTE: These changes break the previous API somewhat (some functions renamed)
 
 #include "HamShield_comms.h"
 
@@ -38,9 +41,9 @@ int8_t HSreadWord(uint8_t devAddr, uint8_t regAddr, uint16_t *data)
 	sei();
 	regAddr = regAddr | (1 << 7);
 	
-	//cli();
-	digitalWrite(devAddr, 0); //PORTC &= ~(1<<1); //devAddr used as chip select
-	//sei();
+	cli();
+	PORTC &= ~(1<<1); //digitalWrite(nSEN, 0);
+	sei();
 	for (int i = 0; i < 8; i++) {
 		temp = ((regAddr & (0x80 >> i)) != 0);
 		cli();
@@ -76,9 +79,9 @@ int8_t HSreadWord(uint8_t devAddr, uint8_t regAddr, uint16_t *data)
 		*data |= temp_dat; // digitalRead(DAT);
 		delayMicroseconds(9);
 	}
-	digitalWrite(devAddr, 1); //PORTC |= (1<<1);// CS
+	cli();
+	PORTC |= (1<<1);//digitalWrite(nSEN, 1);
 	
-	cli();	
 	DDRC &= ~((1<<5) | (1<<4)); // set direction all input (for ADC)
 	sei();
 	return 1;
@@ -124,9 +127,9 @@ bool HSwriteWord(uint8_t devAddr, uint8_t regAddr, uint16_t data)
 	sei();
 	regAddr = regAddr & ~(1 << 7);
 	
-	//cli();
-	digitalWrite(devAddr, 0); // PORTC &= ~(1<<1); //CS
-	//sei();
+	cli();
+	PORTC &= ~(1<<1); //digitalWrite(nSEN, 0);
+	sei();
 	for (int i = 0; i < 8; i++) {
 		temp_reg = ((regAddr & (0x80 >> i)) != 0);
 		cli();
@@ -159,10 +162,9 @@ bool HSwriteWord(uint8_t devAddr, uint8_t regAddr, uint16_t data)
 		sei();
 		delayMicroseconds(10);
 	}
-	
-	digitalWrite(devAddr, 1); //PORTC |= (1<<1); //CS
-	
 	cli();
+	PORTC |= (1<<1); //digitalWrite(nSEN, 1);
+	
 	DDRC &= ~((1<<5) | (1<<4)); // set direction to input for ADC
 	sei();
 	return true;

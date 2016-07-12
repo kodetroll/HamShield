@@ -2,6 +2,8 @@
 // Based on Programming Manual rev. 2.0, 5/19/2011 (RM-MPU-6000A-00)
 // 11/22/2013 by Morgan Redfield <redfieldm@gmail.com>
 // 04/26/2015 various changes Casey Halverson <spaceneedle@gmail.com>
+// 07/11/2016 various changes to CTCSS as per AT1846S dox Kodetroll(KB4OID) <kb4oid@kb4oid.org>
+//		NOTE: These changes break the previous API somewhat (some functions renamed)
 
 #include "Arduino.h"
 #include "HamShield.h"
@@ -119,7 +121,7 @@ volatile long bouncer = 0;
  * @see A1846S_DEFAULT_ADDRESS
  */
 HamShield::HamShield() {
-    devAddr = A1; // devAddr is the chip select pin used by the HamShield
+    devAddr = A1846S_DEV_ADDR_SENLOW;
     sHamShield = this;
 	
     pinMode(A1, OUTPUT);
@@ -129,15 +131,15 @@ HamShield::HamShield() {
 }
 
 /** Specific address constructor.
- * @param chip select pin for HamShield
+ * @param address I2C address
  * @see A1846S_DEFAULT_ADDRESS
  * @see A1846S_ADDRESS_AD0_LOW
  * @see A1846S_ADDRESS_AD0_HIGH
  */
-HamShield::HamShield(uint8_t cs_pin) {
-    devAddr = cs_pin;
+HamShield::HamShield(uint8_t address) {
+    devAddr = address;
 	
-    pinMode(devAddr, OUTPUT);
+	pinMode(A1, OUTPUT);
     digitalWrite(A1, HIGH);
     pinMode(A4, OUTPUT);
     pinMode(A5, OUTPUT);
@@ -672,23 +674,116 @@ bool HamShield::getCssDetEnabled(){
 }
 
 // ctcss freq
-void HamShield::setCtcss(float freq) {
-        int dfreq = freq / 10000;
-        dfreq = dfreq * 65536;
-        setCtcssFreq(dfreq);
+
+// ctcss phase shift sel
+// 00= no phase shift, (def) 
+// 01=120 degree phase shift,
+// 10=180 degree phase shift,
+// 11=240 degree phase shift.
+void HamShield::setCtcssPhase(uint16_t ctcssPhaseSel) {
+	//HSwriteBitsW(devAddr, A1846S_SUBAUDIO_REG_NEW, A1846S_CTCSS_SHIFT_SEL_BIT, A1846S_CTCSS_SHIFT_SEL_LENGTH, ctcssPhaseSel & 0x03);
+	HSwriteBitsW(devAddr, A1846S_SUBAUDIO_REG_NEW, A1846S_CTCSS_SHIFT_SEL_BIT, A1846S_CTCSS_SHIFT_SEL_LENGTH, ctcssPhaseSel);
+}
+// ctcss tx mode sel
+// 11=ctcss with 1846S (def)
+// 10=cdcss with 1846S
+// 01=ctcss/cdcss from GPIO0
+void HamShield::setCtcssTxMode(uint16_t ctcssTxModeSel) {
+	//HSwriteBitsW(devAddr, A1846S_SUBAUDIO_REG_NEW, A1846S_CTCSS_MODE_SEL_BIT, A1846S_CTCSS_MODE_SEL_LENGTH, ctcssModeSel & 0x03);
+	HSwriteBitsW(devAddr, A1846S_SUBAUDIO_REG_NEW, A1846S_CTCSS_MODE_SEL_BIT, A1846S_CTCSS_MODE_SEL_LENGTH, ctcssTxModeSel);
+}
+void HamShield::setCtcssTxEnable(void) {
+	setCtcssPhase(0x00);
+	setCtcssTxMode(0x03);
+}
+void HamShield::setCtcss(uint8_t which, float freq) {
+        //int dfreq = freq / 10000;
+        //dfreq = dfreq * 65536;
+        int dfreq = freq * 100;
+        setCtcssFreq(which,dfreq);
+        setCtcssTxEnable();
+}
+void HamShield::setCtcssTx(float freq) {
+        //int dfreq = freq / 10000;
+        //dfreq = dfreq * 65536;
+        int dfreq = freq * 100;
+        setCtcssTxFreq(dfreq);
+}
+void HamShield::setCtcssRx(float freq) {
+        //int dfreq = freq / 10000;
+        //dfreq = dfreq * 65536;
+        int dfreq = freq * 100;
+        setCtcssRxFreq(dfreq);
+}
+void HamShield::setCtcssFull(float fltTxFreq,float fltRxFreq) {
+        int txfreq = fltTxFreq * 100;
+        setCtcssTxFreq(txfreq);
+        int rxfreq = fltRxFreq * 100;
+        setCtcssRxFreq(rxfreq);
+}
+void HamShield::setCtcssTxFreq(uint16_t freq){
+	//HSwriteWord(devAddr, A1846S_CTCSS_FREQ_REG, freq);
+	//HSwriteWord(devAddr, A1846S_CTCSS_FREQ_REGA, freq);
+	setCtcssFreq(CTCSS_FREQ_TX, freq);
 }
 
-void HamShield::setCtcssFreq(uint16_t freq){
-	HSwriteWord(devAddr, A1846S_CTCSS_FREQ_REG, freq);
+void HamShield::setCtcssRxFreq(uint16_t freq){
+	//HSwriteWord(devAddr, A1846S_CTCSS_FREQ_REG, freq);
+	//HSwriteWord(devAddr, A1846S_CTCSS_FREQ_REGA, freq);
+	setCtcssFreq(CTCSS_FREQ_RX, freq);
 }
-uint16_t HamShield::getCtcssFreq(){
-	HSreadWord(devAddr, A1846S_CTCSS_FREQ_REG, radio_i2c_buf);
+void HamShield::setCtcssFreq(uint8_t which, uint16_t freq){
+	uint8_t reg_addr;
+	switch(which)
+	{
+		case CTCSS_FREQ_RX : // RX Freq = 1
+			//HSwriteWord(devAddr, A1846S_CTCSS_FREQ_REGA, freq);
+			reg_addr = A1846S_CTCSS_FREQ_REG_RX;
+			break;
+		case CTCSS_FREQ_TX : // TX Freq = 0 
+		default :
+			//HSwriteWord(devAddr, A1846S_CTCSS_FREQ_REG, freq);
+			reg_addr = A1846S_CTCSS_FREQ_REG_TX;
+			break;
+	}
+	HSwriteWord(devAddr, reg_addr, freq);
+	setCtcssTxEnable();
+}
+uint16_t HamShield::getCtcssFreq(uint8_t which){
+	uint8_t reg_addr;
+	switch(which)
+	{
+		case CTCSS_FREQ_RX : // RX Freq = 1
+			//HSwriteWord(devAddr, A1846S_CTCSS_FREQ_REGA, freq);
+			reg_addr = A1846S_CTCSS_FREQ_REGA;
+			break;
+		case CTCSS_FREQ_TX : // TX Freq = 0 
+		default :
+			//HSwriteWord(devAddr, A1846S_CTCSS_FREQ_REG, freq);
+			reg_addr = A1846S_CTCSS_FREQ_REG;
+			break;
+	}
+	HSreadWord(devAddr, reg_addr, radio_i2c_buf);
+	//HSreadWord(devAddr, A1846S_CTCSS_FREQ_REG, radio_i2c_buf);
+	//HSreadWord(devAddr, A1846S_CTCSS_FREQ_REGA, radio_i2c_buf);
 	
 	return radio_i2c_buf[0];
 }
+uint16_t HamShield::getCtcssTxFreq(){
+	//HSreadWord(devAddr, A1846S_CTCSS_FREQ_REG, radio_i2c_buf);
+	//HSreadWord(devAddr, A1846S_CTCSS_FREQ_REGA, radio_i2c_buf);
+	return(getCtcssFreq(CTCSS_FREQ_TX));
+	//return radio_i2c_buf[0];
+}
+uint16_t HamShield::getCtcssRxFreq(){
+	//HSreadWord(devAddr, A1846S_CTCSS_FREQ_REG, radio_i2c_buf);
+	//HSreadWord(devAddr, A1846S_CTCSS_FREQ_REGA, radio_i2c_buf);
+	return(getCtcssFreq(CTCSS_FREQ_RX));
+	//return radio_i2c_buf[0];
+}
 void HamShield::setCtcssFreqToStandard(){
 	// freq must be 134.4Hz for standard cdcss mode
-	setCtcssFreq(0x2268);
+	setCtcssTxFreq(0x2268);
 } 
 
 // cdcss codes
@@ -720,7 +815,7 @@ void HamShield::setCdcssCode(uint16_t code) {
 uint16_t HamShield::getCdcssCode() {
 	uint32_t oct_code;
 	HSreadWord(devAddr, A1846S_CDCSS_CODE_HI_REG, radio_i2c_buf);
-	oct_code = ((uint32_t)radio_i2c_buf[0] << 16);
+	oct_code = (radio_i2c_buf[0] << 16);
 	HSreadWord(devAddr, A1846S_CDCSS_CODE_LO_REG, radio_i2c_buf);
 	oct_code += radio_i2c_buf[0];
 	
@@ -747,25 +842,23 @@ bool HamShield::getSQState(){
 }
 
 // SQ threshold
-void HamShield::setSQHiThresh(int16_t sq_hi_threshold){
-	// Sq detect high th, rssi_cmp will be 1 when rssi>th_h_sq, unit 1dB
-	uint16_t sq = 137 + sq_hi_threshold;
-	HSwriteWord(devAddr, A1846S_SQ_OPEN_THRESH_REG, sq);
+void HamShield::setSQHiThresh(uint16_t sq_hi_threshold){
+	// Sq detect high th, rssi_cmp will be 1 when rssi>th_h_sq, unit 1/8dB
+	HSwriteWord(devAddr, A1846S_SQ_OPEN_THRESH_REG, sq_hi_threshold);
 } 
-int16_t HamShield::getSQHiThresh(){
+uint16_t HamShield::getSQHiThresh(){
 	HSreadWord(devAddr, A1846S_SQ_OPEN_THRESH_REG, radio_i2c_buf);
 	
-	return radio_i2c_buf[0] - 137;
+	return radio_i2c_buf[0];
 }
-void HamShield::setSQLoThresh(int16_t sq_lo_threshold){
-	// Sq detect low th, rssi_cmp will be 0 when rssi<th_l_sq && time delay meet, unit 1 dB
-	uint16_t sq = 137 + sq_lo_threshold;
-	HSwriteWord(devAddr, A1846S_SQ_SHUT_THRESH_REG, sq);
+void HamShield::setSQLoThresh(uint16_t sq_lo_threshold){
+	// Sq detect low th, rssi_cmp will be 0 when rssi<th_l_sq && time delay meet, unit 1/8 dB
+	HSwriteWord(devAddr, A1846S_SQ_SHUT_THRESH_REG, sq_lo_threshold);
 }
-int16_t HamShield::getSQLoThresh(){
+uint16_t HamShield::getSQLoThresh(){
 	HSreadWord(devAddr, A1846S_SQ_SHUT_THRESH_REG, radio_i2c_buf);
 	
-	return radio_i2c_buf[0] - 137;
+	return radio_i2c_buf[0];
 }
 
 // SQ out select
