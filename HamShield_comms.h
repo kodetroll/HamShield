@@ -1,5 +1,4 @@
-// 07/11/2016 various changes to CTCSS as per AT1846S dox Kodetroll(KB4OID) <kb4oid@kb4oid.org>
-//		NOTE: These changes break the previous API somewhat (some functions renamed)
+
 
 
 #ifndef _HAMSHIELD_COMMS_H_
