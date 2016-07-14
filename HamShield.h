@@ -10,8 +10,6 @@
 #ifndef _HAMSHIELD_H_
 #define _HAMSHIELD_H_
 
-//#include "I2Cdev_rda.h"
-//#include "I2Cdev.h"
 #include "HamShield_comms.h"
 #include "SimpleFIFO.h"
 #include "AFSK.h"
@@ -31,11 +29,6 @@
 // button modes
 #define PTT_MODE 1
 #define RESET_MODE 2
-
-// Device Constants
-#define A1846S_DEV_ADDR_SENHIGH 0b0101110
-#define A1846S_DEV_ADDR_SENLOW  0b1110001
-
 
 // Device Registers
 #define A1846S_CTL_REG              0x30    // control register
@@ -257,7 +250,7 @@
 
 
 #define ROBOT8BW 2
-#define SC2-180 55
+#define SC2_180 55
 #define MARTIN1 44
 
 // RTTY Frequencies
@@ -278,7 +271,7 @@ class HamShield {
         static HamShield *sHamShield; // HamShield singleton, used for ISRs mostly
 		
         HamShield();
-        HamShield(uint8_t address);
+        HamShield(uint8_t cs_pin);
 
         void initialize();
         bool testConnection();
@@ -304,8 +297,6 @@ class HamShield {
 		void setModeTransmit(); // turn off rx, turn on tx
 		void setModeReceive(); // turn on rx, turn off tx
 		void setModeOff(); // turn off rx, turn off tx, set pwr_dwn bit
-		
-		bool getRX();
 		
 		// set tx source
 		// 00 - Mic source
@@ -404,10 +395,10 @@ class HamShield {
 		bool getSQState();
 		
 		// SQ threshold
-		void setSQHiThresh(uint16_t sq_hi_threshold); // Sq detect high th, rssi_cmp will be 1 when rssi>th_h_sq, unit 1/8dB
-		uint16_t getSQHiThresh();
-		void setSQLoThresh(uint16_t sq_lo_threshold); // Sq detect low th, rssi_cmp will be 0 when rssi<th_l_sq && time delay meet, unit 1/8 dB
-		uint16_t getSQLoThresh();
+		void setSQHiThresh(int16_t sq_hi_threshold); // Sq detect high th, rssi_cmp will be 1 when rssi>th_h_sq, unit 1dB
+		int16_t getSQHiThresh();
+		void setSQLoThresh(int16_t sq_lo_threshold); // Sq detect low th, rssi_cmp will be 0 when rssi<th_l_sq && time delay meet, unit 1dB
+		int16_t getSQLoThresh();
 		
 		// SQ out select
 		void setSQOutSel();
@@ -580,7 +571,7 @@ class HamShield {
 		bool getTX();
 		
 		void setRX(bool on_noff);
-		//bool getRX();
+		bool getRX();
 };
 
 #endif /* _HAMSHIELD_H_ */
